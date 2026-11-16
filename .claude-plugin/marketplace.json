@@ -1,0 +1,5 @@
+{
+  "name": "claude-koi-pond-theme",
+  "owner": { "name": "jseiden12" },
+  "plugins": [{ "name": "koi-moon-pond", "source": "./" }]
+}
