@@ -1,6 +1,6 @@
 {
   "name": "koi-moon-pond",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A pixel-art koi pond under the moon, with a little fisherman who reacts to what Claude Code is doing. Side view or top-down.",
   "types": "./types/index.d.ts"
 }

@@ -2,7 +2,7 @@
 
 A pixel-art theme for the Claude Code desktop app: a moonlit koi pond behind your conversation, with a little fisherman on the dock who reacts to what Claude is doing.
 
-- **Side view** (default): night sky with stars, a Milky Way and the odd shooting star; a willow with an owl, a stone lantern, reeds and water lilies on the left bank; koi, swaying weed and moonbeams under the water; and a fisherman on the dock.
+- **Side view** (default), from dawn to night by your clock: night sky with stars, a Milky Way and the odd shooting star; a willow with an owl, a stone lantern, reeds and water lilies on the left bank; koi, swaying weed and moonbeams under the water; and a fisherman on the dock.
 - **Top-down view**: koi swimming around lily pads, ripples, fireflies and the moon's reflection.
 - A dark colour theme to match: deep navy panels, koi-orange accents.
 
@@ -23,11 +23,26 @@ The busy parts sit in the margins either side of the chat column, so the middle 
 
 ## The rest of the pond reacts too
 
-- **Koi**: two curious koi hover under his bobber and nibble while Claude works, swim up when he casts, leap for joy at a catch, and the one that got away darts off on an error.
-- **The owl** in the willow bobs its head and hoots while Claude reads, cocks its head while you type, flaps its wings at a catch, turns its back on an error, and keeps watch while he sleeps.
-- **Lights**: the stone lantern, the dock lamp and the far village glow brighter while Claude works; the dock lamp dims while he dozes.
-- **Sky**: a catch brings a shooting star, a flare of moonlight and a burst of fireflies; an error draws a cloud over the moon; shooting stars come more often while he sleeps.
+- **Koi**: three curious koi swim up when he casts, nibble at the bobber and blow bubbles while Claude works, dart off in all directions when he reels, and sink to rest while he sleeps. On an error, the one that got away darts off to the deep.
+- **The owl** flies from the willow to the dock's lantern pole while Claude reads and hoots beside him, cocks its head while you type, flaps its wings at a catch, turns its back on an error, and keeps watch while he sleeps.
+- **Wind**: the willow, reeds and seaweed whip about while he reels in a fish.
+- **Water lilies** open wide while Claude edits.
+- **Lights**: the stone lantern, the dock lamp and the far village pulse brighter while Claude works; the dock lamp dims while he dozes.
+- **Sky and water**: a catch stirs ripples across the whole pond and brings a shooting star, a flare of moonlight and a burst of fireflies; an error draws a cloud over the moon; shooting stars come more often while he sleeps.
 - **Moths** leave the dock lamp for his lantern while Claude reads.
+
+## Day and night
+
+The side view follows your computer's clock through four phases, redrawing only when the phase changes:
+
+| Phase | Hours | Look |
+|---|---|---|
+| Dawn | 5–7 am | peach horizon, the moon setting, the last stars, lanterns half-lit |
+| Day | 7 am–5 pm | hazy blue sky and sun, teal water, dragonflies, the owl asleep |
+| Dusk | 5–9 pm | violet-to-orange sky, a low sun, first stars, lanterns and fireflies |
+| Night | 9 pm–5 am | moon, Milky Way, shooting stars, fireflies |
+
+The glass behind the chat is a little more solid in the brighter phases, to keep text readable. Behind the chat column, stars stay dim and still.
 
 ## Install
 
@@ -53,6 +68,7 @@ Installed at the user scope, it also loads in the desktop app's Code tab session
 
 - `/koi-view`: switch between the side view and the top-down view (`/koi-view side`, `/koi-view top`)
 - `/fisherman <mood>`: show one of his reactions on demand, for example `/fisherman catch`
+- `/koi-time <phase>`: hold `dawn`, `day`, `dusk` or `night`; `/koi-time auto` follows the clock again
 
 ## Notes
 

@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ThemeSetArgs, Timer } from 'claude-code'
 
-import type { Mood, Pond, View } from '../types'
+import type { Mood, Phase, Pond, TimeSetting, View } from '../types'
 import { makeColors } from './make-colors.js'
 
 // ─── Palette: deep moonlit water, koi-orange accent, jade, gold, lavender ───
@@ -303,6 +303,11 @@ const LOTUS = sprite(
   ['....P....', '..p.W.p..', '.pPPWPPp.', 'pPWPYPWPp', '.pPPPPPp.', '..ppppp..'],
   { p: '#d9578e', P: '#f59ac0', W: '#ffe2ee', Y: '#ffd45e' },
 )
+// wide open, petals out, for while Claude edits
+const LOTUS_OPEN = sprite(
+  ['.....P.....', '.p..PWP..p.', 'pPp.PWP.pPp', '.pPPWYWPPp.', 'p.pPPPPPp.p', '...ppppp...'],
+  { p: '#d9578e', P: '#f59ac0', W: '#ffe2ee', Y: '#ffd45e' },
+)
 const topLotus = (x: number, y: number): string =>
   `<g transform="translate(${x - 4} ${y - 3})"><g>${moveD('0 0;0 -1', 4, rnd() * 4)}<use href="#lotus"/></g></g>`
 
@@ -415,24 +420,173 @@ ${topWater()}<g>${stars}</g><g>${glints}</g>
 
 const WL = 104 // the waterline
 const SIDE_MOON = { x: 290, y: 26, r: 10 }
-const SKY = ['#04081a', '#071029', '#0a1534', '#0e1b3e', '#132349', '#192c55', '#203562', '#28406f']
-const DEEP = ['#1b3a63', '#163257', '#122a4c', '#0e2241', '#0b1b36', '#08152b', '#061020', '#040b17']
+// ─── time of day ───
+// Each phase is a palette and a cast: what hangs in the sky, which lights are
+// lit, who is out. The scene keeps its layout; only these change.
+type Pal = {
+  sky: string[] // top of the sky to the horizon
+  deep: string[] // the surface to the bed
+  glowAt: { x: number; y: number } // where the sky is brightest
+  cel: { x: number; y: number; r: number; kind: 'moon' | 'sun' }
+  core: string
+  halo: string
+  reflectX: number
+  reflect: string
+  ridge: string
+  far: string
+  near: string
+  pagoda: string
+  window: string
+  bank: string
+  grass: [string, string]
+  surface: string
+  glint: string
+  ray: string
+  cloud: [string, string]
+  mist: [string, string]
+  stars: 'all' | 'some' | 'few' | 'none'
+  lights: number // 0 off, 1 full
+  fireflies: boolean
+  dragonflies: boolean
+  owlAwake: boolean
+  glass: number
+}
+const PAL: Record<Phase, Pal> = {
+  night: {
+    sky: ['#04081a', '#071029', '#0a1534', '#0e1b3e', '#132349', '#192c55', '#203562', '#28406f'],
+    deep: ['#1b3a63', '#163257', '#122a4c', '#0e2241', '#0b1b36', '#08152b', '#061020', '#040b17'],
+    glowAt: { x: 290, y: 26 },
+    cel: { x: 290, y: 26, r: 10, kind: 'moon' },
+    core: '#e6eefc',
+    halo: '#9fbde6',
+    reflectX: 290,
+    reflect: '#dfeaff',
+    ridge: '#152647',
+    far: '#0c1730',
+    near: '#09122a',
+    pagoda: '#0a1530',
+    window: '#e9b45a',
+    bank: '#0b1f17',
+    grass: ['#1d4a35', '#2a6a48'],
+    surface: '#4a7fb0',
+    glint: '#9fc3ea',
+    ray: '#8fb8e8/0.1',
+    cloud: ['#2a4068/0.75', '#18284a/0.75'],
+    mist: ['#2f4a72/0.6', '#26405f/0.5'],
+    stars: 'all',
+    lights: 1,
+    fireflies: true,
+    dragonflies: false,
+    owlAwake: true,
+    glass: 0.55,
+  },
+  dawn: {
+    sky: ['#1f2748', '#2a3358', '#3a4068', '#544d72', '#735b7a', '#97697c', '#bc7e7c', '#dc9a82'],
+    deep: ['#56607e', '#4a5472', '#3f4866', '#343d59', '#2a324c', '#212840', '#181e33', '#101526'],
+    glowAt: { x: 300, y: 100 },
+    cel: { x: 24, y: 20, r: 7, kind: 'moon' },
+    core: '#f2e6ea',
+    halo: '#d8b8c8',
+    reflectX: 296,
+    reflect: '#ffd0b0',
+    ridge: '#4a4a6e',
+    far: '#383a5e',
+    near: '#272a48',
+    pagoda: '#2e3052',
+    window: '#f0b860',
+    bank: '#162320',
+    grass: ['#2f4a3a', '#3e5e48'],
+    surface: '#c9a0a0',
+    glint: '#ffd8c0',
+    ray: '#ffd0b0/0.08',
+    cloud: ['#e0a8a8/0.6', '#8a6a8a/0.6'],
+    mist: ['#9a8aa8/0.55', '#8a7a98/0.5'],
+    stars: 'few',
+    lights: 0.5,
+    fireflies: false,
+    dragonflies: false,
+    owlAwake: false,
+    glass: 0.6,
+  },
+  day: {
+    sky: ['#2c4f78', '#335a85', '#3a6590', '#42709a', '#4b7ba3', '#5686ac', '#6290b3', '#6e9aba'],
+    deep: ['#3a7a90', '#2f6c80', '#275f72', '#205264', '#1a4656', '#143a48', '#0f2e3b', '#0a232e'],
+    glowAt: { x: 290, y: 26 },
+    cel: { x: 290, y: 26, r: 9, kind: 'sun' },
+    core: '#fff2c0',
+    halo: '#ffe9a0',
+    reflectX: 290,
+    reflect: '#fff4cf',
+    ridge: '#5a7f98',
+    far: '#4a6e88',
+    near: '#35566e',
+    pagoda: '#3a5a72',
+    window: '#3a5a72',
+    bank: '#2a4e2c',
+    grass: ['#4a8a4a', '#64a35a'],
+    surface: '#a8d0ee',
+    glint: '#d8ecff',
+    ray: '#e8f4ff/0.12',
+    cloud: ['#e8eff6/0.85', '#c4d4e4/0.85'],
+    mist: ['#8fb0cc/0.45', '#7a9cba/0.4'],
+    stars: 'none',
+    lights: 0,
+    fireflies: false,
+    dragonflies: true,
+    owlAwake: false,
+    glass: 0.68,
+  },
+  dusk: {
+    sky: ['#1a1838', '#251d46', '#36234f', '#4d2a56', '#6a3258', '#8e3f57', '#b65452', '#d9704b'],
+    deep: ['#4a3a68', '#3c315c', '#30284f', '#262143', '#1d1a37', '#15142b', '#0e0e20', '#090916'],
+    glowAt: { x: 282, y: 70 },
+    cel: { x: 282, y: 62, r: 10, kind: 'sun' },
+    core: '#ffb070',
+    halo: '#ff9a60',
+    reflectX: 282,
+    reflect: '#ffb070',
+    ridge: '#3d2c55',
+    far: '#2b1f42',
+    near: '#1b1430',
+    pagoda: '#22183a',
+    window: '#f0b860',
+    bank: '#121a1a',
+    grass: ['#2c3f30', '#3d553c'],
+    surface: '#d08a7a',
+    glint: '#ffc890',
+    ray: '#ffb080/0.08',
+    cloud: ['#e08a7a/0.7', '#7a4a6a/0.7'],
+    mist: ['#6a4a78/0.5', '#5a3e68/0.45'],
+    stars: 'some',
+    lights: 1,
+    fireflies: true,
+    dragonflies: false,
+    owlAwake: true,
+    glass: 0.6,
+  },
+}
+const phaseAt = (d: Date): Phase => {
+  const h = d.getHours() + d.getMinutes() / 60
+  return h >= 5 && h < 7 ? 'dawn' : h >= 7 && h < 17 ? 'day' : h >= 17 && h < 21 ? 'dusk' : 'night'
+}
 
 const farRidge = (x: number): number => Math.round(82 + 6 * Math.sin(x / 23) + 4 * Math.sin(x / 9 + 1) + 3 * Math.sin(x / 41 + 2))
 const bankTop = (x: number): number =>
   x < 80 ? Math.round(91 + 2 * Math.sin(x / 7)) : Math.round(91 + (x - 80) * 0.45 + Math.sin(x / 5))
 
-let sideStaticCache: string | undefined
-const sideStatic = (): string => {
-  if (sideStaticCache) return sideStaticCache
+const sideStaticCache: Partial<Record<Phase, string>> = {}
+const sideStatic = (ph: Phase): string => {
+  const cached = sideStaticCache[ph]
+  if (cached) return cached
+  const pal = PAL[ph]
   // sky
   const sky = new Px()
   for (let y = 0; y < WL; y += 4) {
     const cells: Array<string | undefined> = []
     for (let x = 0; x < W; x += 4) {
       const b = 0.5 + (bayer(x / 4, y / 4) - 0.5) * 0.8
-      const m = Math.max(0, 1 - Math.hypot(x - SIDE_MOON.x, (y - SIDE_MOON.y) * 1.2) / 150)
-      cells.push(SKY[Math.max(0, Math.min(7, Math.floor((y / WL) * 4.2 + m * m * 4 + b - 0.4)))]!)
+      const m = Math.max(0, 1 - Math.hypot(x - pal.glowAt.x, (y - pal.glowAt.y) * 1.2) / 150)
+      cells.push(pal.sky[Math.max(0, Math.min(7, Math.floor((y / WL) * 4.2 + m * m * 4 + b - 0.4)))]!)
     }
     sky.row(y, cells, 0, 4, 4)
   }
@@ -442,8 +596,8 @@ const sideStatic = (): string => {
     const cells: Array<string | undefined> = []
     for (let x = 0; x < W; x += 4) {
       const b = 0.5 + (bayer(x / 4, y / 4) - 0.5) * 0.8
-      const m = Math.max(0, 1 - Math.abs(x - SIDE_MOON.x) / 120) * Math.max(0, 1 - (y - WL) / 70)
-      cells.push(DEEP[Math.max(0, Math.min(7, Math.floor(((y - WL) / (H - WL)) * 7.5 - m * 2 + b - 0.3)))]!)
+      const m = Math.max(0, 1 - Math.abs(x - pal.reflectX) / 120) * Math.max(0, 1 - (y - WL) / 70)
+      cells.push(pal.deep[Math.max(0, Math.min(7, Math.floor(((y - WL) / (H - WL)) * 7.5 - m * 2 + b - 0.3)))]!)
     }
     water.row(y, cells, 0, 4, 4)
   }
@@ -451,7 +605,7 @@ const sideStatic = (): string => {
   const hills = new Px()
   for (let y = 60; y < WL; y++) {
     const far: Array<string | undefined> = []
-    for (let x = 0; x < W; x += 2) far.push(farRidge(x) <= y ? (farRidge(x) === y ? '#152647' : '#0c1730') : undefined)
+    for (let x = 0; x < W; x += 2) far.push(farRidge(x) <= y ? (farRidge(x) === y ? pal.ridge : pal.far) : undefined)
     hills.row(y, far, 0, 1, 2)
   }
   const near = new Px()
@@ -459,7 +613,7 @@ const sideStatic = (): string => {
     const cells: Array<string | undefined> = []
     for (let x = 0; x < W; x += 2) {
       const top = x > 200 ? Math.round(98 - 6 * Math.sin((x - 200) / 40) - 2 * Math.sin(x / 7)) : 120
-      cells.push(top <= y ? '#09122a' : undefined)
+      cells.push(top <= y ? pal.near : undefined)
     }
     near.row(y, cells, 0, 1, 2)
   }
@@ -485,17 +639,17 @@ const sideStatic = (): string => {
         '..sssssss..',
         '..sssssss..',
       ],
-      { s: '#0a1530', y: '#e9b45a' },
+      { s: pal.pagoda, y: pal.window },
     ),
   )
   // the left bank, grass on top
   const bank = new Px()
   for (let x = 0; x < 116; x++) {
     const top = bankTop(x)
-    if (top > WL + 2) continue
-    bank.rect(x, top, 1, WL + 3 - top, '#0b1f17')
-    bank.rect(x, top, 1, 1, x % 3 === 0 ? '#2a6a48' : '#1d4a35')
-    if (x % 7 === 2) bank.rect(x, top - 1, 1, 1, '#2a6a48')
+    if (top >= WL) continue
+    bank.rect(x, top, 1, WL - top, pal.bank)
+    bank.rect(x, top, 1, 1, x % 3 === 0 ? pal.grass[1] : pal.grass[0])
+    if (x % 7 === 2) bank.rect(x, top - 1, 1, 1, pal.grass[1])
   }
   // seabed
   const bed = new Px()
@@ -542,15 +696,15 @@ const sideStatic = (): string => {
     bankTop(67) - 13,
     sprite(
       ['...s...', '.sssss.', 'sssssss', '..sss..', '.sLLLs.', '.sLYLs.', '.sLLLs.', 'sssssss', '..sss..', '..sss..', '..sss..', '.sssss.', 'sssssss'],
-      { s: '#4e5566', L: '#d99a3a', Y: '#ffe29a' },
+      pal.lights > 0 ? { s: '#4e5566', L: '#d99a3a', Y: '#ffe29a' } : { s: '#5e6576', L: '#4a4038', Y: '#5a4c40' },
     ),
   )
-  return (sideStaticCache =
+  return (sideStaticCache[ph] =
     sky.svg() + hills.svg() + pagoda + near.svg() + water.svg() + bed.svg() + bank.svg() + toro + dock.svg() + bucket)
 }
 
 // the willow: canopy, and strands that sway in two frames
-const willow = (): string => {
+const willow = (sway = 3.2): string => {
   const canopy = new Px()
   for (const [cx, cy, r] of [[46, 52, 14], [62, 56, 12], [32, 58, 11], [52, 44, 10], [72, 62, 8]] as const)
     for (let y = -r; y <= r; y++) {
@@ -577,11 +731,11 @@ const willow = (): string => {
     }
     return px.svg()
   }
-  return `${trunk.svg()}${canopy.svg()}<g>${anim('opacity', '1;0', 3.2, 0)}${strands(0)}</g><g opacity="0">${anim('opacity', '0;1', 3.2, 0)}${strands(1)}</g>`
+  return `${trunk.svg()}${canopy.svg()}<g>${anim('opacity', '1;0', sway, 0)}${strands(0)}</g><g opacity="0">${anim('opacity', '0;1', sway, 0)}${strands(1)}</g>`
 }
 
 // reeds and cattails at the edge of the bank, swaying in two frames
-const reeds = (): string => {
+const reeds = (sway = 2.6): string => {
   const frame = (f: number): string => {
     const px = new Px()
     for (let i = 0; i < 9; i++) {
@@ -592,11 +746,11 @@ const reeds = (): string => {
     }
     return px.svg()
   }
-  return `<g>${anim('opacity', '1;0', 2.6, 0.4)}${frame(0)}</g><g opacity="0">${anim('opacity', '0;1', 2.6, 0.4)}${frame(1)}</g>`
+  return `<g>${anim('opacity', '1;0', sway, 0.4)}${frame(0)}</g><g opacity="0">${anim('opacity', '0;1', sway, 0.4)}${frame(1)}</g>`
 }
 
 // seaweed in the margins, two frames
-const seaweed = (): string => {
+const seaweed = (sway = 2.4): string => {
   const frame = (f: number): string => {
     const px = new Px()
     for (const [x0, h, c] of [[44, 26, '#1f5a46'], [52, 34, '#2a7a5a'], [66, 20, '#1f5a46'], [84, 30, '#2a7a5a'], [98, 18, '#1f5a46'], [272, 28, '#2a7a5a'], [282, 18, '#1f5a46'], [298, 34, '#1f5a46'], [312, 24, '#2a7a5a']] as const) {
@@ -605,7 +759,7 @@ const seaweed = (): string => {
     }
     return px.svg()
   }
-  return `<g>${anim('opacity', '1;0', 2.4, 0)}${frame(0)}</g><g opacity="0">${anim('opacity', '0;1', 2.4, 0)}${frame(1)}</g>`
+  return `<g>${anim('opacity', '1;0', sway, 0)}${frame(0)}</g><g opacity="0">${anim('opacity', '0;1', sway, 0)}${frame(1)}</g>`
 }
 
 // the side-on koi: 17×7, head to the right, two frames
@@ -849,14 +1003,14 @@ const fisherman = (p: Pond): string => {
 // A low mist bank over the water behind the chat column: it melts the horizon
 // where the conversation sits, and thins out toward the bank and the dock so
 // the waterline stays crisp in the margins.
-const mistLayer = (shift: number): string => {
+const mistLayer = (shift: number, colors: [string, string]): string => {
   const px = new Px()
   for (let y = WL - 12; y <= WL + 8; y += 2) {
     const cells: Array<string | undefined> = []
     for (let x = 0; x < W; x += 2) {
       const across = Math.max(0, Math.min(1, (x - 112) / 24, (246 - x) / 24))
       const v = (1 - Math.abs(y + 1 - WL) / (y < WL ? 13 : 9)) * across
-      cells.push(v > 0 && bayer((x >> 1) + shift * 2, (y >> 1) + shift) < v * 0.85 ? (v > 0.55 ? '#2f4a72/0.6' : '#26405f/0.5') : undefined)
+      cells.push(v > 0 && bayer((x >> 1) + shift * 2, (y >> 1) + shift) < v * 0.85 ? (v > 0.55 ? colors[0] : colors[1]) : undefined)
     }
     px.row(y, cells, 0, 2, 2)
   }
@@ -865,12 +1019,15 @@ const mistLayer = (shift: number): string => {
 
 // Stars twinkle in five groups (one animation each, not one per star), with a
 // few bright four-point stars, a faint Milky Way and a shooting star.
-const skyStars = (mx: number, my: number): string => {
+const skyStars = (mx: number, my: number, level: Pal['stars']): string => {
+  if (level === 'none') return ''
+  const count = level === 'all' ? 120 : level === 'some' ? 45 : 16
+  const top = level === 'all' ? 74 : level === 'some' ? 48 : 34
   const groups = Array.from({ length: 5 }, () => new Px())
   const calm = new Px()
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < count; i++) {
     const x = ri(0, W - 1)
-    const y = ri(0, 74)
+    const y = ri(0, top)
     if (Math.hypot(x - mx, y - my) < 22 || y > farRidge(x) - 3) continue
     const white = rnd() < 0.25
     // behind the chat column the stars hold still and dim, so they don't flicker under the text
@@ -900,8 +1057,39 @@ const skyStars = (mx: number, my: number): string => {
   // a shooting star every 27 seconds, across the upper left
   const pos = Array.from({ length: 8 }, (_, k) => `${30 + k * 8} ${8 + k * 4}`)
   const shooting = `<g opacity="0">${anim('opacity', '0;1;0', 27, 5, '0;0.9;0.99')}<g>${moveD([pos[0]!, ...pos].join(';'), 27, 5, ['0', ...pos.map((_, k) => s2(0.9 + k * 0.0125))].join(';'))}<rect width="2" height="1" fill="#ffffff"/><rect x="-3" y="-1" width="3" height="1" fill="#cfe0ff" fill-opacity=".6"/><rect x="-7" y="-2" width="4" height="1" fill="#9fb6e6" fill-opacity=".3"/></g></g>`
+  if (level !== 'all') return `<g opacity="${level === 'few' ? 0.5 : 0.8}">${`<g opacity=".55">${calm.svg()}</g>` + twinkle}</g>`
   return milky.svg() + `<g opacity=".55">${calm.svg()}</g>` + twinkle + bright + shooting
 }
+
+// the sun: a soft dithered halo round a bright disc
+const sunDisc = (cx: number, cy: number, r: number, core: string, halo: string): string => {
+  const disc = new Px()
+  for (let y = cy - r; y <= cy + r; y++) {
+    const cells: Array<string | undefined> = []
+    for (let x = cx - r; x <= cx + r; x++) {
+      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy)
+      cells.push(d >= r ? undefined : d < r * 0.55 ? '#fffbe8' : core)
+    }
+    disc.row(y, cells, cx - r)
+  }
+  return `<g>${anim('opacity', '1;.8;.95', 5, 0)}${glow(cx, cy, r + 22, `${halo}/0.22`, 0.9)}</g>${disc.svg()}`
+}
+const celestial = (pal: Pal): string =>
+  pal.cel.kind === 'sun' ? sunDisc(pal.cel.x, pal.cel.y, pal.cel.r, pal.core, pal.halo) : moonDisc(pal.cel.x, pal.cel.y, pal.cel.r)
+
+// dragonflies dart over the reeds and lilies by day
+const dragonflies = (): string =>
+  [[96, 84], [128, 92], [262, 82]]
+    .map(([x, y], i) => {
+      const hops = '0 0;0 0;6 -3;6 -3;6 -3;-4 -5;-4 -5;3 2;3 2;3 2;0 0'
+      return `<g transform="translate(${x} ${y})"><g>${moveD(hops, 5 + i, i * 1.7)}${two(
+        `<rect width="5" height="1" fill="#3fa8d8"/><rect x="1" y="-1" width="2" height="1" fill="#e6f4ff" fill-opacity=".8"/>`,
+        `<rect width="5" height="1" fill="#3fa8d8"/><rect x="1" y="1" width="2" height="1" fill="#e6f4ff" fill-opacity=".8"/>`,
+        0.2,
+        i * 0.1,
+      )}</g></g>`
+    })
+    .join('')
 
 // an owl in the willow, blinking now and then
 const OWL = (eye: string): string =>
@@ -912,7 +1100,7 @@ const blinking = (open: string, shut: string): string =>
 // The owl has opinions: it hoots along while Claude reads, cocks its head while
 // you type, flaps at a catch, turns its back on an error, and keeps watch while
 // the fisherman sleeps.
-const owl = (mood: Mood): string => {
+const owl = (mood: Mood, awake: boolean): string => {
   const branch = `<rect x="70" y="69" width="14" height="1" fill="#2a1f1a"/>`
   let body: string
   if (mood === 'catch')
@@ -921,6 +1109,7 @@ const owl = (mood: Mood): string => {
       sprite(['W.B.B.W', 'WBBBBBW', '.BYBYB.', '.BBbBB.', '..BBB..', '...k...'], OWL_COLORS),
       0.35,
     ))
+  else if (!awake) body = at(75, 63, OWL('b')) // asleep in daylight
   else if (mood === 'snap') body = at(75, 63, sprite(['.B.B.', 'BBBBB', 'BbBbB', 'BBBBB', '.BBB.', '..k..'], OWL_COLORS))
   else if (mood === 'typing')
     body = at(75, 63, blinking(
@@ -930,11 +1119,23 @@ const owl = (mood: Mood): string => {
   else {
     body = at(75, 63, blinking(OWL('Y'), OWL('b')))
     if (mood === 'lantern') {
-      // head-bobbing, with a little hoot drifting up
-      body = `<g>${moveD('0 0;0 1', 0.5, 0)}${body}</g>`
-      body += [0, 1]
-        .map(i => `<g opacity="0">${anim('opacity', '0;.9;0', 2.4, i * 1.2, '0;0.15;0.7')}<g>${moveL('82 62', '88 52', 2.4, i * 1.2)}<rect width="2" height="1" fill="${GLYPH}"/><rect y="1" width="1" height="1" fill="${GLYPH}"/></g></g>`)
+      // it swoops from the willow to the dock's lantern pole, then bobs and hoots beside him
+      const n = 14
+      const path = Array.from({ length: n }, (_, i) => {
+        const t = i / (n - 1)
+        return `${Math.round(74 + t * 238)} ${Math.round(63 - 34 * 4 * t * (1 - t))}`
+      })
+      const wings = two(
+        sprite(['W.B.B.W', 'WBBBBBW', '.BYBYB.', '.BBbBB.', '..BBB..'], OWL_COLORS),
+        sprite(['..B.B..', '.BBBBB.', 'WBYBYBW', 'WBBbBBW', 'W.BBB.W'], OWL_COLORS),
+        0.25,
+      )
+      const flying = `<g>${shot('opacity', '1;0', 1.8, '0;0.99')}<g>${shotMove(path.join(';'), 1.8, even(n))}${wings}</g></g>`
+      const hoots = [0, 1]
+        .map(i => `<g opacity="0">${anim('opacity', '0;.9;0', 2.4, i * 1.2, '0;0.15;0.7')}<g>${moveL('306 60', '300 50', 2.4, i * 1.2)}<rect width="2" height="1" fill="${GLYPH}"/><rect y="1" width="1" height="1" fill="${GLYPH}"/></g></g>`)
         .join('')
+      const perched = `<g opacity="0">${shot('opacity', '0;1', 1.8, '0;0.99')}<g>${moveD('0 0;0 1', 0.5, 0)}${at(313, 64, blinking(OWL('Y'), OWL('b')))}</g>${hoots}</g>`
+      return branch + flying + perched
     }
   }
   return branch + body
@@ -943,6 +1144,8 @@ const owl = (mood: Mood): string => {
 // Everything besides the fisherman that answers his mood, in screen coordinates.
 // His bobber sits at x 250 on the waterline.
 const pondReacts = (p: Pond): { sky: string; water: string; air: string } => {
+  const pal = PAL[p.phase]
+  const night = pal.stars !== 'none'
   let sky = ''
   let water = ''
   let air = ''
@@ -951,17 +1154,24 @@ const pondReacts = (p: Pond): { sky: string; water: string; air: string } => {
     const motion = nibble ? moveD('0 0;1 0;0 0;1 -1;0 0', 0.7, x) : moveD('0 0;0 1', 2.4, x)
     return `<g transform="translate(${x} ${y})" opacity=".85"><g>${motion}<g transform="${turn}">${sideFish(kind)}</g></g></g>`
   }
-  const pair = (nibble: boolean): string => curious('kohaku', 229, 112, false, nibble) + curious('ogon', 254, 116, true, nibble)
+  const pair = (nibble: boolean, dy = 0): string =>
+    curious('kohaku', 229, 112 + dy, false, nibble) + curious('ogon', 254, 116 + dy, true, nibble) + curious('tancho', 238, 124 + dy, false, nibble)
+  const bubbles = [246, 252, 255]
+    .map((x, i) => `<g transform="translate(${x} ${114 + i * 3})" opacity="0">${anim('opacity', '0;.8;.8;0', 1.6, i * 0.5, '0;0.1;0.7;0.9')}<g>${moveL('0 0', '0 -9', 1.6, i * 0.5)}<rect width="1" height="1" fill="#cfe6ff"/></g></g>`)
+    .join('')
   switch (p.mood) {
     case 'idle':
     case 'typing':
     case 'lantern':
     case 'mend':
-    case 'sleep':
       water += pair(false)
       break
+    case 'sleep':
+      // they sink a little and rest
+      water += `<g opacity=".75">${pair(false, 10)}</g>`
+      break
     case 'watch':
-      water += pair(true)
+      water += pair(true) + bubbles
       break
     case 'cast':
       // they swim up from the deep to see what landed
@@ -982,20 +1192,14 @@ const pondReacts = (p: Pond): { sky: string; water: string; air: string } => {
       break
     }
     case 'catch': {
-      // two koi leap for joy, a shooting star crosses, the moon flares, fireflies burst
-      const leap = (x0: number, delay: number, kind: string): string => {
-        const n = 10
-        const arc = Array.from({ length: n }, (_, i) => {
-          const t = i / (n - 1)
-          return `${Math.round(x0 + t * 22)} ${Math.round(110 - 4 * 18 * t * (1 - t))}`
-        })
-        return `<g opacity="0">${shotAt(delay, 'opacity', '1;0', 1.1, '0;0.97')}<g>${shotMoveAt(delay, arc.join(';'), 1.1, even(n))}${sideFish(kind)}</g></g>`
-      }
-      water += leap(262, 0.5, 'showa') + leap(272, 1.1, 'platinum')
-      water += `<g opacity="0">${shotAt(0.5, 'opacity', '0;1;0', 2, '0;0.01;0.7')}${ripple(271, WL + 1, 0, 1)}</g>`
+      // the pond stirs, a shooting star crosses, the moon flares, fireflies burst
+      // the whole pond stirs: rings spread out across the water
+      water += [[150, 0.2], [196, 0.5], [120, 0.8], [276, 0.35]]
+        .map(([x, d]) => `<g opacity="0">${shotAt(d!, 'opacity', '0;1;0', 2.2, '0;0.01;0.9')}${ripple(x!, WL + 1, 0, 1.1)}</g>`)
+        .join('')
       const star = Array.from({ length: 9 }, (_, k) => `${20 + k * 9} ${6 + k * 4}`)
-      sky += `<g opacity="0">${shotAt(0.3, 'opacity', '0;1;0', 1.2, '0;0.01;0.85')}<g>${shotMoveAt(0.3, star.join(';'), 1.2, even(star.length))}<rect width="2" height="1" fill="#fff"/><rect x="-3" y="-1" width="3" height="1" fill="#cfe0ff" fill-opacity=".7"/><rect x="-7" y="-2" width="4" height="1" fill="#9fb6e6" fill-opacity=".35"/></g></g>`
-      sky += `<g opacity="0">${shot('opacity', '0;1;.4;0', 2.4, '0;0.1;0.5;0.9')}${glow(SIDE_MOON.x, SIDE_MOON.y, 22, '#dfeaff/0.2', 0.9)}</g>`
+      if (night) sky += `<g opacity="0">${shotAt(0.3, 'opacity', '0;1;0', 1.2, '0;0.01;0.85')}<g>${shotMoveAt(0.3, star.join(';'), 1.2, even(star.length))}<rect width="2" height="1" fill="#fff"/><rect x="-3" y="-1" width="3" height="1" fill="#cfe0ff" fill-opacity=".7"/><rect x="-7" y="-2" width="4" height="1" fill="#9fb6e6" fill-opacity=".35"/></g></g>`
+      sky += `<g opacity="0">${shot('opacity', '0;1;.4;0', 2.4, '0;0.1;0.5;0.9')}${glow(pal.cel.x, pal.cel.y, 22, `${pal.reflect}/0.2`, 0.9)}</g>`
       air += Array.from({ length: 6 }, (_, i) => {
         const a = (i / 6) * Math.PI * 2 + 0.5
         const path = [0, 1, 2, 3, 4].map(k => `${Math.round(Math.cos(a) * k * 4)} ${Math.round(Math.sin(a) * k * 3 - k)}`)
@@ -1003,10 +1207,18 @@ const pondReacts = (p: Pond): { sky: string; water: string; air: string } => {
       }).join('')
       break
     }
-    case 'reel':
+    case 'reel': {
+      // the struggle sends the curious koi darting off both ways
+      const flee = (kind: string, x: number, y: number, dx: number, flip: boolean): string => {
+        const path = Array.from({ length: 8 }, (_, i) => `${x + dx * i * i} ${y + i * 2}`)
+        const turn = flip ? 'translate(17 0) scale(-1 1)' : ''
+        return `<g>${shot('opacity', '1;0', 1.2, '0;0.95')}<g>${shotMove(path.join(';'), 1.2, even(path.length))}<g transform="${turn}">${sideFish(kind)}</g></g></g>`
+      }
+      water += flee('kohaku', 229, 112, -2, true) + flee('ogon', 254, 116, 2, false) + flee('tancho', 238, 124, -1, true)
       break
+    }
   }
-  if (p.mood === 'sleep') {
+  if (p.mood === 'sleep' && night) {
     // shooting stars come more often while he dreams
     const pos = Array.from({ length: 8 }, (_, k) => `${252 + k * 7} ${2 + k}`)
     sky += `<g opacity="0">${anim('opacity', '0;1;0', 9, 2, '0;0.8;0.95')}<g>${moveD([pos[0]!, ...pos].join(';'), 9, 2, ['0', ...pos.map((_, k) => s2(0.8 + k * 0.018))].join(';'))}<rect width="2" height="1" fill="#fff"/><rect x="-3" y="-1" width="3" height="1" fill="#cfe0ff" fill-opacity=".6"/></g></g>`
@@ -1016,21 +1228,22 @@ const pondReacts = (p: Pond): { sky: string; water: string; air: string } => {
 
 const buildSide = (p: Pond): string => {
   reseed(23)
-  const { x: mx, y: my, r } = SIDE_MOON
+  const pal = PAL[p.phase]
+  const { x: mx, y: my } = pal.cel
   const reflection = Array.from({ length: 9 }, (_, i) => {
     const w = Math.max(3, 20 - i * 2 + ri(-2, 2))
-    return `<rect x="${mx - (w >> 1) + ri(-2, 2)}" y="${WL + 2 + i * 3}" width="${w}" height="1" fill="#dfeaff">${anim('opacity', '.8;.25;.55', 1.8, i * 0.41, '0;0.4;0.7')}</rect>`
+    return `<rect x="${pal.reflectX - (w >> 1) + ri(-2, 2)}" y="${WL + 2 + i * 3}" width="${w}" height="1" fill="${pal.reflect}">${anim('opacity', '.8;.25;.55', 1.8, i * 0.41, '0;0.4;0.7')}</rect>`
   }).join('')
   const surface = Array.from({ length: 16 }, () => {
     const x = rnd() < 0.5 ? ri(0, 114) : ri(250, W - 4) // glints stay in the margins
-    return `<rect x="${x}" y="${WL}" width="${ri(2, 5)}" height="1" fill="#9fc3ea" opacity="0">${anim('opacity', '.6;.2;0', 5, rnd() * 5, '0;0.2;0.4')}</rect>`
+    return `<rect x="${x}" y="${WL}" width="${ri(2, 5)}" height="1" fill="${pal.glint}" opacity="0">${anim('opacity', '.6;.2;0', 5, rnd() * 5, '0;0.2;0.4')}</rect>`
   }).join('')
   const rays = [92, 180, 272]
     .map((x0, i) => {
       const px = new Px()
       for (let y = WL + 1; y < 186; y += 2)
         for (let x = 0; x < 10; x += 2)
-          if (bayer(x >> 1, y >> 1) < 0.35 * (1 - (y - WL) / 90)) px.rect(Math.round(x0 - (y - WL) * 0.45 + x), y, 2, 2, '#8fb8e8/0.1')
+          if (bayer(x >> 1, y >> 1) < 0.35 * (1 - (y - WL) / 90)) px.rect(Math.round(x0 - (y - WL) * 0.45 + x), y, 2, 2, pal.ray)
       return `<g>${anim('opacity', '1;.6;.85', 7, i * 2)}${px.svg()}</g>`
     })
     .join('')
@@ -1039,19 +1252,20 @@ const buildSide = (p: Pond): string => {
     const dur = ri(6, 11)
     return `<g transform="translate(${x} 186)"><g>${moveL('0 0', '0 -78', dur, rnd() * dur)}<rect width="1" height="1" fill="#a9cdf2" fill-opacity=".7"/></g></g>`
   }).join('')
-  const stars = skyStars(mx, my)
+  const stars = skyStars(mx, my, pal.stars)
   const reacts = pondReacts(p)
+  const gust = p.mood === 'reel' || p.mood === 'catch'
   const working = p.mood === 'watch' || p.mood === 'reel' || p.mood === 'lantern' || p.mood === 'mend' || p.mood === 'cast'
   // lights of a far-off village on the hills
-  const village = [172, 178, 207, 214, 221, ...(working ? [186, 193, 228, 234, 240] : [])]
+  const village = (pal.lights === 0 ? [] : pal.lights < 1 ? [178, 214] : [172, 178, 207, 214, 221, ...(working ? [186, 193, 228, 234, 240] : [])])
     .map((x, i) => `<rect x="${x}" y="${farRidge(x) + 2 + (i % 2)}" width="1" height="1" fill="#f0b860">${anim('opacity', '.9;.5;.8;.3', 4 + i, i * 1.3, '0;0.3;0.6;0.85')}</rect>`)
     .join('')
   // starlight caught on the water near the banks
   const wstars = new Px()
   for (let i = 0; i < 16; i++) wstars.rect(rnd() < 0.5 ? ri(2, 114) : ri(250, 318), ri(WL + 3, WL + 16), 1, 1, '#9fb6dc')
-  const waterStars = `<g opacity=".5">${anim('opacity', '.5;.2;.4;.1', 3.7, 0.5, '0;0.3;0.6;0.8')}${wstars.svg()}</g>`
+  const waterStars = pal.stars === 'none' ? '' : `<g opacity=".5">${anim('opacity', '.5;.2;.4;.1', 3.7, 0.5, '0;0.3;0.6;0.8')}${wstars.svg()}</g>`
   // moths around the dock lantern
-  const moths = [0, 1]
+  const moths = (pal.lights === 0 && p.mood !== 'lantern' ? [] : [0, 1])
     .map(i => `<g transform="translate(${p.mood === 'lantern' ? 256 + i * 3 : 308 + i * 4} ${p.mood === 'lantern' ? 88 + i * 2 : 74 + i * 2})"><g>${moveD('0 0;2 -1;3 1;1 3;-1 2;-2 0;-1 -2', 0.9 + i * 0.3, i * 0.4)}<rect width="1" height="1" fill="#e8dcc0"/></g></g>`)
     .join('')
   const cloud = (y: number, dur: number, phase: number, w: number): string => {
@@ -1059,7 +1273,7 @@ const buildSide = (p: Pond): string => {
     for (const [cx, cy, rr] of [[w * 0.3, 6, 6], [w * 0.55, 4, 8], [w * 0.8, 7, 5], [w * 0.15, 8, 4]] as const)
       for (let yy = -rr; yy <= rr; yy++) {
         const half = Math.floor(Math.sqrt(Math.max(0, rr * rr - yy * yy)) * 1.6)
-        if (cy + yy <= 10) px.rect(Math.round(cx) - half, cy + yy, half * 2, 1, yy < -rr / 2 ? '#2a4068/0.75' : '#18284a/0.75')
+        if (cy + yy <= 10) px.rect(Math.round(cx) - half, cy + yy, half * 2, 1, yy < -rr / 2 ? pal.cloud[0] : pal.cloud[1])
       }
     return `<g transform="translate(0 ${y})"><g>${moveL(`${-w} 0`, `${W + w} 0`, dur, phase)}${px.svg()}</g></g>`
   }
@@ -1085,24 +1299,26 @@ const buildSide = (p: Pond): string => {
     rootstock +
     LILY_X.map((x, i) => {
       const pad = `<rect x="${x}" y="${WL - 1}" width="8" height="1" fill="#2c7049"/><rect x="${x + 1}" y="${WL - 2}" width="6" height="1" fill="#3c8a5d"/>`
-      const bloom = at(x - 1, WL - 8, `<g>${moveD('0 0;0 -1', 4, i)}<use href="#lotus"/></g>`)
+      const bloom = p.mood === 'mend' ? at(x - 2, WL - 9, `<g>${moveD('0 0;0 -1', 1.2, i)}<use href="#lotusOpen"/></g>`) : at(x - 1, WL - 8, `<g>${moveD('0 0;0 -1', 4, i)}<use href="#lotus"/></g>`)
       return pad + bloom
     }).join('')
-  const fireflies = [
-    ...Array.from({ length: 7 }, () => firefly(ri(40, 116), ri(56, 100))),
-    ...Array.from({ length: 3 }, () => firefly(ri(254, 314), ri(60, 92))),
-  ].join('')
+  const fireflies = pal.fireflies
+    ? [...Array.from({ length: 7 }, () => firefly(ri(40, 116), ri(56, 100))), ...Array.from({ length: 3 }, () => firefly(ri(254, 314), ri(60, 92)))].join('')
+    : pal.dragonflies
+      ? dragonflies()
+      : ''
   const lampBoost = (cx: number, cy: number): string => (working ? glow(cx, cy, 24, '#ffcf7a/0.1', 0.8) : '')
-  const dockLamp = `<g opacity="${p.mood === 'sleep' ? 0.45 : 1}">${anim('opacity', '1;.75;.9;.8', 1.1, 0.3)}${glow(312, 76, 16, '#ffcf7a/0.2', 0.9)}${lampBoost(312, 76)}</g>${at(310, 73, sprite(['LL', 'YY', 'YY', 'LL'], { L: '#8a5a2b', Y: '#ffe29a' }))}`
-  const toroGlow = `<g>${anim('opacity', '1;.7;.9', 1.4, 0.8)}${glow(67, bankTop(67) - 8, 12, '#ffcf7a/0.2', 0.9)}${lampBoost(67, bankTop(67) - 8)}</g>`
+  const lit = pal.lights > 0
+  const dockLamp = `${lit ? `<g opacity="${(p.mood === 'sleep' ? 0.45 : 1) * pal.lights}">${anim('opacity', working ? '1;.55;1;.7' : '1;.75;.9;.8', working ? 0.6 : 1.1, 0.3)}${glow(312, 76, 16, '#ffcf7a/0.2', 0.9)}${lampBoost(312, 76)}</g>` : ''}${at(310, 73, sprite(['LL', 'YY', 'YY', 'LL'], { L: '#8a5a2b', Y: lit ? '#ffe29a' : '#6a5a40' }))}`
+  const toroGlow = lit ? `<g opacity="${pal.lights}">${anim('opacity', working ? '1;.5;1' : '1;.7;.9', working ? 0.7 : 1.4, 0.8)}${glow(67, bankTop(67) - 8, 12, '#ffcf7a/0.2', 0.9)}${lampBoost(67, bankTop(67) - 8)}</g>` : ''
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice">
-<defs>${sideKoiDefs}<g id="lotus">${LOTUS}</g>${RINGS.map(rr => `<g id="ring${rr}">${ringPath(rr, 2.6)}</g>`).join('')}${FLY}</defs>
-${sideStatic()}
-${stars}${village}${moonDisc(mx, my, r)}${reacts.sky}${cloud(14, 260, 40, 50)}${cloud(38, 340, 200, 40)}
-${willow()}${owl(p.mood)}${toroGlow}${reeds()}
-<rect x="0" y="${WL}" width="118" height="1" fill="#4a7fb0" fill-opacity=".55"/><rect x="118" y="${WL}" width="130" height="1" fill="#4a7fb0" fill-opacity=".15"/><rect x="248" y="${WL}" width="${W - 248}" height="1" fill="#4a7fb0" fill-opacity=".55"/>${surface}${waterStars}${reflection}
-${rays}${seaweed()}${bubbles}${lilies}${two(mistLayer(0), mistLayer(1), 3.4)}
+<defs><linearGradient id="wl" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="${pal.surface}" stop-opacity=".55"/><stop offset=".34" stop-color="${pal.surface}" stop-opacity=".55"/><stop offset=".43" stop-color="${pal.surface}" stop-opacity=".15"/><stop offset=".69" stop-color="${pal.surface}" stop-opacity=".15"/><stop offset=".78" stop-color="${pal.surface}" stop-opacity=".55"/><stop offset="1" stop-color="${pal.surface}" stop-opacity=".55"/></linearGradient>${sideKoiDefs}<g id="lotus">${LOTUS}</g><g id="lotusOpen">${LOTUS_OPEN}</g>${RINGS.map(rr => `<g id="ring${rr}">${ringPath(rr, 2.6)}</g>`).join('')}${FLY}</defs>
+${sideStatic(p.phase)}
+${stars}${village}${celestial(pal)}${reacts.sky}${cloud(14, 260, 40, 50)}${cloud(38, 340, 200, 40)}
+${willow(gust ? 0.7 : 3.2)}${owl(p.mood, pal.owlAwake)}${toroGlow}${reeds(gust ? 0.5 : 2.6)}
+<rect x="0" y="${WL}" width="${W}" height="1" fill="url(#wl)"/>${surface}${waterStars}${reflection}
+${rays}${seaweed(gust ? 0.6 : 2.4)}${bubbles}${lilies}${two(mistLayer(0, pal.mist), mistLayer(1, pal.mist), 3.4)}
 ${patrol('kohaku', 128, 34, 110, 30, 0.1)}${patrol('ogon', 158, 38, 106, 36, 0.55)}${patrol('tancho', 176, 44, 96, 26, 0.3, 0.85)}
 ${patrol('showa', 134, 254, 310, 23, 0.2)}${patrol('sanke', 164, 258, 312, 27, 0.7)}
 ${cruise('asagi', 146, 1, 80, 0.3, 0.45)}${cruise('chagoi', 172, -1, 95, 0.75, 0.4)}${reacts.water}
@@ -1113,8 +1329,11 @@ ${dockLamp}${moths}<g transform="translate(10 0)">${fisherman(p)}</g>${fireflies
 // ═══════════════════════════ STATE AND EVENTS ═══════════════════════════
 
 const SCENE_ID = 'koi-moon-pond'
-const pond = atom({ plugin: 'koi-moon-pond', key: 'pond' } as const, { view: 'side', mood: 'idle', catches: 0, since: 0 } as Pond, {
-  shape: 'pond-1',
+const pond = atom(
+  { plugin: 'koi-moon-pond', key: 'pond' } as const,
+  { view: 'side', mood: 'idle', catches: 0, since: 0, time: 'auto', phase: phaseAt(new Date()) } as Pond,
+  {
+  shape: 'pond-2',
 })
 
 const MOODS: Mood[] = ['idle', 'typing', 'cast', 'watch', 'reel', 'lantern', 'mend', 'catch', 'snap', 'sleep']
@@ -1160,19 +1379,37 @@ const go = async ($: Engine, mood: Mood, then?: [Mood, number]): Promise<void> =
   await apply($, mood, then)
 }
 
-const LOOK: ThemeSetArgs = {
+// The glass behind the chat thickens a little in brighter phases, to keep text readable.
+const lookFor = (ph: Phase): ThemeSetArgs => ({
   colors: theme,
   overrideColorScheme: 'dark',
-  backdrop: { scene: SCENE_ID, glass: { blur: 1, tint: '#08111e', opacity: 0.55 } },
+  backdrop: { scene: SCENE_ID, glass: { blur: 1, tint: '#08111e', opacity: PAL[ph].glass } },
+})
+const PHASES: Phase[] = ['dawn', 'day', 'dusk', 'night']
+
+// Follow the clock: when the phase turns (four times a day), redraw once.
+const tick = async ($: Engine): Promise<void> => {
+  const p = await read($, pond)
+  const ph = p.time === 'auto' ? phaseAt(new Date()) : p.time
+  if (ph === p.phase) return
+  await update($, pond, q => ({ ...q, phase: ph }))
+  await $.theme.set(lookFor(ph))
 }
+let clock: Timer | undefined
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const unpainted = problems.find(line => line.startsWith("Desktop won't paint"))
     if (unpainted !== undefined) $.ui.toast(unpainted)
 
-    const set = await $.theme.set(LOOK)
+    const start = await read($, pond)
+    const ph = start.time === 'auto' ? phaseAt(new Date()) : start.time
+    if (ph !== start.phase) await update($, pond, q => ({ ...q, phase: ph }))
+    const set = await $.theme.set(lookFor(ph))
     if (!set.isDrawn) $.ui.status(set.reason)
+    clock?.cancel()
+    clock = $.clock.every(120_000, () => void tick($))
+    await $.command.register({ name: 'koi-time', description: 'Pick the time of day for the koi pond (dawn | day | dusk | night | auto)' })
     await $.command.register({ name: 'koi-view', description: 'Switch the koi pond between side view and top-down view (side | top)' })
     await $.command.register({ name: 'fisherman', description: `Show one of the fisherman's moods (${MOODS.join(', ')})` })
     // A reload of this mod (or a restart) can land mid-reaction, often right as a
@@ -1185,6 +1422,19 @@ export const register: Register = on => {
     else if (saved.mood !== 'idle' && saved.mood !== 'sleep') void go($, 'idle')
 
     return next(e)
+  })
+
+  on('command.run', { command: 'koi-time' }, async ($, e) => {
+    const arg = e.args.trim().toLowerCase()
+    const time = (arg === 'auto' || (PHASES as string[]).includes(arg) ? arg : '') as TimeSetting | ''
+    if (time === '') {
+      const p = await read($, pond)
+      return { text: `Koi pond time: ${p.time === 'auto' ? `auto (now ${p.phase})` : p.time}. Pick one: ${PHASES.join(', ')} or auto.` }
+    }
+    const ph = time === 'auto' ? phaseAt(new Date()) : time
+    await update($, pond, q => ({ ...q, time, phase: ph, view: 'side' as View }))
+    await $.theme.set(lookFor(ph))
+    return { text: time === 'auto' ? `Koi pond: following the clock (now ${ph}).` : `Koi pond: ${ph}, held until /koi-time auto.` }
   })
 
   on('command.run', { command: 'koi-view' }, async ($, e) => {
