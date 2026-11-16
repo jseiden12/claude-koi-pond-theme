@@ -1,4 +1,4 @@
-export type Mood = 'idle' | 'typing' | 'cast' | 'watch' | 'reel' | 'lantern' | 'mend' | 'catch' | 'snap' | 'sleep'
+export type Mood = 'idle' | 'typing' | 'cast' | 'watch' | 'reel' | 'lantern' | 'bait' | 'catch' | 'snap' | 'sleep'
 export type View = 'side' | 'top'
 export type Phase = 'night' | 'dawn' | 'day' | 'dusk'
 export type TimeSetting = 'auto' | Phase

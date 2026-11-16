@@ -15,7 +15,7 @@ The busy parts sit in the margins either side of the chat column, so the middle 
 | sent a message | casts his line |
 | working | watches the bobber |
 | reading or searching | holds a lantern out over the water |
-| editing files | mends his net |
+| editing files | baits his hook with a worm |
 | running commands or agents | reels in a fish that fights back |
 | hitting an error | ends up with a slack line, scratching his head |
 | done with a turn | catches a koi, which leaps into his bucket |
@@ -24,7 +24,7 @@ The busy parts sit in the margins either side of the chat column, so the middle 
 ## The rest of the pond reacts too
 
 - **Koi**: three curious koi swim up when he casts, nibble at the bobber and blow bubbles while Claude works, dart off in all directions when he reels, and sink to rest while he sleeps. On an error, the one that got away darts off to the deep.
-- **The owl** flies from the willow to the dock's lantern pole while Claude reads and hoots beside him, cocks its head while you type, flaps its wings at a catch, turns its back on an error, and keeps watch while he sleeps.
+- **The owl** flies across from the willow to the dock's lantern pole while Claude reads, hoots beside him, and flies home after, cocks its head while you type, flaps its wings at a catch, turns its back on an error, and keeps watch while he sleeps.
 - **Wind**: the willow, reeds and seaweed whip about while he reels in a fish.
 - **Water lilies** open wide while Claude edits.
 - **Lights**: the stone lantern, the dock lamp and the far village pulse brighter while Claude works; the dock lamp dims while he dozes.

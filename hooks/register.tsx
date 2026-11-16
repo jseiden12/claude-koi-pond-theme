@@ -704,7 +704,7 @@ const sideStatic = (ph: Phase): string => {
 }
 
 // the willow: canopy, and strands that sway in two frames
-const willow = (sway = 3.2): string => {
+const willow = (sway = 5.2): string => {
   const canopy = new Px()
   for (const [cx, cy, r] of [[46, 52, 14], [62, 56, 12], [32, 58, 11], [52, 44, 10], [72, 62, 8]] as const)
     for (let y = -r; y <= r; y++) {
@@ -735,7 +735,7 @@ const willow = (sway = 3.2): string => {
 }
 
 // reeds and cattails at the edge of the bank, swaying in two frames
-const reeds = (sway = 2.6): string => {
+const reeds = (sway = 4.2): string => {
   const frame = (f: number): string => {
     const px = new Px()
     for (let i = 0; i < 9; i++) {
@@ -750,7 +750,7 @@ const reeds = (sway = 2.6): string => {
 }
 
 // seaweed in the margins, two frames
-const seaweed = (sway = 2.4): string => {
+const seaweed = (sway = 4): string => {
   const frame = (f: number): string => {
     const px = new Px()
     for (const [x0, h, c] of [[44, 26, '#1f5a46'], [52, 34, '#2a7a5a'], [66, 20, '#1f5a46'], [84, 30, '#2a7a5a'], [98, 18, '#1f5a46'], [272, 28, '#2a7a5a'], [282, 18, '#1f5a46'], [298, 34, '#1f5a46'], [312, 24, '#2a7a5a']] as const) {
@@ -929,17 +929,38 @@ const fisherman = (p: Pond): string => {
       extra += `<g>${anim('opacity', '1;.7;.9;.8', 0.9, 0)}${glow(249, 92, 18, '#ffcf7a/0.22', 0.9)}${glow(249, WL + 6, 14, '#ffcf7a/0.12', 0.7)}</g>${lamp}`
       break
     }
-    case 'mend': {
-      // editing: rod propped on the deck, mending the net on his lap
+    case 'bait': {
+      // editing: line reeled in, rod propped on the deck; he holds the hook in one
+      // hand and, with the other, takes a worm from the bait tin on his lap and
+      // threads it on: reach, lift, thread, then a moment to admire it
+      const WORM = '#e0868a'
+      const dot = (x: number, y: number, c = WORM): string => `<rect x="${x}" y="${y}" width="1" height="1" fill="${c}"/>`
       px.line(270, 95, 248, 74, ROD)
-      px.line(248, 75, 247, WL - 2, LINE)
-      extra += bobber(246, WL - 1, false)
-      arm(px, [260, 93])
-      arm(px, [265, 93], [266, 89])
-      const net = new Px()
-      for (let y = 93; y <= 97; y++) for (let x = 254; x <= 266; x++) if ((x + y) % 2 === 0) net.rect(x, y, 1, 1, '#9aa6b8')
-      const needle = (x: number): string => `<rect x="${x}" y="92" width="1" height="2" fill="#e6eefc"/>`
-      extra += net.svg() + two(needle(258), needle(262), 0.5)
+      px.line(248, 75, 255, 89, LINE)
+      px.rect(250, 79, 2, 1, '#e8432c')
+      px.rect(250, 80, 2, 1, '#f6f1e7')
+      arm(px, [256, 90])
+      // the hook, just below his fingers
+      extra += dot(255, 91, '#c8d2e0') + dot(254, 92, '#c8d2e0') + dot(255, 92, '#c8d2e0')
+      // the bait tin: rim, earth, and a worm peeking out
+      px.rect(261, 93, 5, 1, '#9aa6b8')
+      px.rect(262, 93, 3, 1, '#4a3426')
+      px.rect(261, 94, 5, 2, '#6b7280')
+      extra += two(dot(263, 92), dot(262, 92), 0.9)
+      const hand = (h: readonly [number, number]): string => {
+        const a = new Px()
+        arm(a, h, [266, 89])
+        return a.svg()
+      }
+      const frames = [
+        hand([263, 92]),
+        hand([259, 87]) + two(dot(259, 88) + dot(259, 89) + dot(260, 90), dot(259, 88) + dot(259, 89) + dot(258, 90), 0.3),
+        hand([256, 88]) + dot(256, 89) + dot(254, 91) + dot(253, 92),
+        hand([262, 92]) + two(dot(254, 93) + dot(253, 92) + dot(253, 91), dot(254, 93) + dot(255, 93) + dot(253, 92), 0.4),
+      ]
+      extra += frames
+        .map((f, i) => `<g opacity="${i ? 0 : 1}">${anim('opacity', frames.map((_, j) => (j === i ? 1 : 0)).join(';'), 3.6, 0, '0;0.22;0.44;0.62')}${f}</g>`)
+        .join('')
       break
     }
     case 'catch': {
@@ -1097,6 +1118,26 @@ const OWL = (eye: string): string =>
 const OWL_COLORS = { B: '#5a4632', b: '#3a2c20', Y: '#ffd45e', k: '#8a6a3a', W: '#7a6248' }
 const blinking = (open: string, shut: string): string =>
   `<g>${anim('opacity', '1;0', 5.5, 0, '0;0.93')}${open}</g><g opacity="0">${anim('opacity', '0;1', 5.5, 0, '0;0.93')}${shut}</g>`
+// The owl's flight between the willow and the dock: many small pixel steps
+// along an arc, wings beating, so it visibly crosses the pond.
+const OWL_FLIGHT = 3.2
+const owlFlight = (x0: number, y0: number, x1: number, y1: number): string => {
+  const n = 64
+  const path = Array.from({ length: n }, (_, i) => {
+    const t = i / (n - 1)
+    const e = t * t * (3 - 2 * t) // ease off the branch and into the landing
+    return `${Math.round(x0 + (x1 - x0) * e)} ${Math.round(y0 + (y1 - y0) * e - 34 * 4 * e * (1 - e))}`
+  })
+  const flip = x1 < x0 ? 'translate(7 0) scale(-1 1)' : ''
+  const wings = two(
+    sprite(['W.B.B.W', 'WBBBBBW', '.BYBYB.', '.BBbBB.', '..BBB..'], OWL_COLORS),
+    sprite(['..B.B..', '.BBBBB.', 'WBYBYBW', 'WBBbBBW', 'W.BBB.W'], OWL_COLORS),
+    0.25,
+  )
+  return `<g>${shot('opacity', '1;0', OWL_FLIGHT, '0;0.99')}<g>${shotMove(path.join(';'), OWL_FLIGHT, even(n))}<g transform="${flip}">${wings}</g></g></g>`
+}
+// set when the mood moves off 'lantern', so the next scene flies the owl home
+let owlLeftLantern = false
 // The owl has opinions: it hoots along while Claude reads, cocks its head while
 // you type, flaps at a catch, turns its back on an error, and keeps watch while
 // the fisherman sleeps.
@@ -1119,25 +1160,16 @@ const owl = (mood: Mood, awake: boolean): string => {
   else {
     body = at(75, 63, blinking(OWL('Y'), OWL('b')))
     if (mood === 'lantern') {
-      // it swoops from the willow to the dock's lantern pole, then bobs and hoots beside him
-      const n = 14
-      const path = Array.from({ length: n }, (_, i) => {
-        const t = i / (n - 1)
-        return `${Math.round(74 + t * 238)} ${Math.round(63 - 34 * 4 * t * (1 - t))}`
-      })
-      const wings = two(
-        sprite(['W.B.B.W', 'WBBBBBW', '.BYBYB.', '.BBbBB.', '..BBB..'], OWL_COLORS),
-        sprite(['..B.B..', '.BBBBB.', 'WBYBYBW', 'WBBbBBW', 'W.BBB.W'], OWL_COLORS),
-        0.25,
-      )
-      const flying = `<g>${shot('opacity', '1;0', 1.8, '0;0.99')}<g>${shotMove(path.join(';'), 1.8, even(n))}${wings}</g></g>`
+      // it flies from the willow to the dock's lantern pole, then bobs and hoots beside him
       const hoots = [0, 1]
         .map(i => `<g opacity="0">${anim('opacity', '0;.9;0', 2.4, i * 1.2, '0;0.15;0.7')}<g>${moveL('306 60', '300 50', 2.4, i * 1.2)}<rect width="2" height="1" fill="${GLYPH}"/><rect y="1" width="1" height="1" fill="${GLYPH}"/></g></g>`)
         .join('')
-      const perched = `<g opacity="0">${shot('opacity', '0;1', 1.8, '0;0.99')}<g>${moveD('0 0;0 1', 0.5, 0)}${at(313, 64, blinking(OWL('Y'), OWL('b')))}</g>${hoots}</g>`
-      return branch + flying + perched
+      const perched = `<g opacity="0">${shot('opacity', '0;1', OWL_FLIGHT, '0;0.99')}<g>${moveD('0 0;0 1', 0.5, 0)}${at(313, 64, blinking(OWL('Y'), OWL('b')))}</g>${hoots}</g>`
+      return branch + owlFlight(74, 63, 312, 63) + perched
     }
   }
+  // back from the lantern pole: it flies home to the willow before settling
+  if (awake && owlLeftLantern) body = owlFlight(312, 63, 74, 63) + `<g opacity="0">${shot('opacity', '0;1', OWL_FLIGHT, '0;0.99')}${body}</g>`
   return branch + body
 }
 
@@ -1163,7 +1195,7 @@ const pondReacts = (p: Pond): { sky: string; water: string; air: string } => {
     case 'idle':
     case 'typing':
     case 'lantern':
-    case 'mend':
+    case 'bait':
       water += pair(false)
       break
     case 'sleep':
@@ -1255,7 +1287,7 @@ const buildSide = (p: Pond): string => {
   const stars = skyStars(mx, my, pal.stars)
   const reacts = pondReacts(p)
   const gust = p.mood === 'reel' || p.mood === 'catch'
-  const working = p.mood === 'watch' || p.mood === 'reel' || p.mood === 'lantern' || p.mood === 'mend' || p.mood === 'cast'
+  const working = p.mood === 'watch' || p.mood === 'reel' || p.mood === 'lantern' || p.mood === 'bait' || p.mood === 'cast'
   // lights of a far-off village on the hills
   const village = (pal.lights === 0 ? [] : pal.lights < 1 ? [178, 214] : [172, 178, 207, 214, 221, ...(working ? [186, 193, 228, 234, 240] : [])])
     .map((x, i) => `<rect x="${x}" y="${farRidge(x) + 2 + (i % 2)}" width="1" height="1" fill="#f0b860">${anim('opacity', '.9;.5;.8;.3', 4 + i, i * 1.3, '0;0.3;0.6;0.85')}</rect>`)
@@ -1295,11 +1327,11 @@ const buildSide = (p: Pond): string => {
   }
   const rootstock = `<rect x="${ROOT.x - 4}" y="${ROOT.y}" width="9" height="2" fill="#3a2e22"/><rect x="${ROOT.x - 2}" y="${ROOT.y - 1}" width="5" height="1" fill="#4a3a2a"/><rect x="${ROOT.x - 6}" y="${ROOT.y + 1}" width="2" height="1" fill="#2e251c"/>`
   const lilies =
-    two(stems(0), stems(1), 3.6, 0.7) +
+    two(stems(0), stems(1), 5.6, 0.7) +
     rootstock +
     LILY_X.map((x, i) => {
       const pad = `<rect x="${x}" y="${WL - 1}" width="8" height="1" fill="#2c7049"/><rect x="${x + 1}" y="${WL - 2}" width="6" height="1" fill="#3c8a5d"/>`
-      const bloom = p.mood === 'mend' ? at(x - 2, WL - 9, `<g>${moveD('0 0;0 -1', 1.2, i)}<use href="#lotusOpen"/></g>`) : at(x - 1, WL - 8, `<g>${moveD('0 0;0 -1', 4, i)}<use href="#lotus"/></g>`)
+      const bloom = p.mood === 'bait' ? at(x - 2, WL - 9, `<g>${moveD('0 0;0 -1', 1.2, i)}<use href="#lotusOpen"/></g>`) : at(x - 1, WL - 8, `<g>${moveD('0 0;0 -1', 4, i)}<use href="#lotus"/></g>`)
       return pad + bloom
     }).join('')
   const fireflies = pal.fireflies
@@ -1316,9 +1348,9 @@ const buildSide = (p: Pond): string => {
 <defs><linearGradient id="wl" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="${pal.surface}" stop-opacity=".55"/><stop offset=".34" stop-color="${pal.surface}" stop-opacity=".55"/><stop offset=".43" stop-color="${pal.surface}" stop-opacity=".15"/><stop offset=".69" stop-color="${pal.surface}" stop-opacity=".15"/><stop offset=".78" stop-color="${pal.surface}" stop-opacity=".55"/><stop offset="1" stop-color="${pal.surface}" stop-opacity=".55"/></linearGradient>${sideKoiDefs}<g id="lotus">${LOTUS}</g><g id="lotusOpen">${LOTUS_OPEN}</g>${RINGS.map(rr => `<g id="ring${rr}">${ringPath(rr, 2.6)}</g>`).join('')}${FLY}</defs>
 ${sideStatic(p.phase)}
 ${stars}${village}${celestial(pal)}${reacts.sky}${cloud(14, 260, 40, 50)}${cloud(38, 340, 200, 40)}
-${willow(gust ? 0.7 : 3.2)}${owl(p.mood, pal.owlAwake)}${toroGlow}${reeds(gust ? 0.5 : 2.6)}
+${willow(gust ? 0.7 : 5.2)}${owl(p.mood, pal.owlAwake)}${toroGlow}${reeds(gust ? 0.5 : 4.2)}
 <rect x="0" y="${WL}" width="${W}" height="1" fill="url(#wl)"/>${surface}${waterStars}${reflection}
-${rays}${seaweed(gust ? 0.6 : 2.4)}${bubbles}${lilies}${two(mistLayer(0, pal.mist), mistLayer(1, pal.mist), 3.4)}
+${rays}${seaweed(gust ? 0.6 : 4)}${bubbles}${lilies}${two(mistLayer(0, pal.mist), mistLayer(1, pal.mist), 3.4)}
 ${patrol('kohaku', 128, 34, 110, 30, 0.1)}${patrol('ogon', 158, 38, 106, 36, 0.55)}${patrol('tancho', 176, 44, 96, 26, 0.3, 0.85)}
 ${patrol('showa', 134, 254, 310, 23, 0.2)}${patrol('sanke', 164, 258, 312, 27, 0.7)}
 ${cruise('asagi', 146, 1, 80, 0.3, 0.45)}${cruise('chagoi', 172, -1, 95, 0.75, 0.4)}${reacts.water}
@@ -1336,14 +1368,14 @@ const pond = atom(
   shape: 'pond-2',
 })
 
-const MOODS: Mood[] = ['idle', 'typing', 'cast', 'watch', 'reel', 'lantern', 'mend', 'catch', 'snap', 'sleep']
+const MOODS: Mood[] = ['idle', 'typing', 'cast', 'watch', 'reel', 'lantern', 'bait', 'catch', 'snap', 'sleep']
 // The app's own bookkeeping (task lists, tool loading, questions) is not work he should react to.
 const IGNORED_TOOLS = /^mcp__ccd_|^(TodoWrite|TaskCreate|TaskUpdate|TaskList|TaskGet|TaskStop|ToolSearch|Skill|AskUserQuestion|EnterPlanMode|ExitPlanMode)$/
 const READ_TOOLS = /^(Read|Grep|Glob|LS|WebFetch|WebSearch|NotebookRead)$|^mcp__.*(read|get|list|search|find|query|fetch)/i
 const EDIT_TOOLS = /^(Edit|Write|MultiEdit|NotebookEdit)$/
 const RUN_TOOLS = /^(Bash|PowerShell|Agent|Task|Workflow|Monitor)$/
 const moodForTool = (tool: string): Mood | undefined =>
-  IGNORED_TOOLS.test(tool) ? undefined : READ_TOOLS.test(tool) ? 'lantern' : EDIT_TOOLS.test(tool) ? 'mend' : RUN_TOOLS.test(tool) ? 'reel' : undefined
+  IGNORED_TOOLS.test(tool) ? undefined : READ_TOOLS.test(tool) ? 'lantern' : EDIT_TOOLS.test(tool) ? 'bait' : RUN_TOOLS.test(tool) ? 'reel' : undefined
 
 // Each change of mood rebuilds the backdrop, so moods change at most once per
 // DWELL; a newer request inside that window replaces a waiting one.
@@ -1363,6 +1395,7 @@ const apply = async ($: Engine, mood: Mood, then?: [Mood, number]): Promise<void
   dozing = undefined
   lastApplied = Date.now()
   if (mood !== current || mood === 'catch' || mood === 'cast') {
+    if (mood !== current) owlLeftLantern = current === 'lantern'
     current = mood
     await update($, pond, p => ({ ...p, mood, since: Date.now() / 1000, catches: p.catches + (mood === 'catch' ? 1 : 0) }))
   }
