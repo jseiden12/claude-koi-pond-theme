@@ -21,6 +21,14 @@ The busy parts sit in the margins either side of the chat column, so the middle 
 | done with a turn | catches a koi, which leaps into his bucket |
 | idle for two minutes | dozes off |
 
+## The rest of the pond reacts too
+
+- **Koi**: two curious koi hover under his bobber and nibble while Claude works, swim up when he casts, leap for joy at a catch, and the one that got away darts off on an error.
+- **The owl** in the willow bobs its head and hoots while Claude reads, cocks its head while you type, flaps its wings at a catch, turns its back on an error, and keeps watch while he sleeps.
+- **Lights**: the stone lantern, the dock lamp and the far village glow brighter while Claude works; the dock lamp dims while he dozes.
+- **Sky**: a catch brings a shooting star, a flare of moonlight and a burst of fireflies; an error draws a cloud over the moon; shooting stars come more often while he sleeps.
+- **Moths** leave the dock lamp for his lantern while Claude reads.
+
 ## Install
 
 At the prompt of a Claude Code terminal session:

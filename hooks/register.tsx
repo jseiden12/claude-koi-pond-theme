@@ -41,6 +41,9 @@ const { theme, problems } = makeColors({
 
 const W = 320
 const H = 200
+// where the chat column sits on a maximised window, in scene pixels
+const CHAT_LEFT = 116
+const CHAT_RIGHT = 250
 
 // ─── build clock and deterministic randomness ───
 let NOW = 0 // wall-clock seconds at this build
@@ -75,6 +78,11 @@ const moveL = (from: string, to: string, dur: number, phase: number): string =>
 // one-shots run from the moment the mood began, and hold their last frame
 const shot = (attr: string, values: string, dur: number, keyTimes: string): string =>
   `<animate attributeName="${attr}" values="${values}" dur="${s2(dur)}s" begin="${s2(-SINCE)}s" fill="freeze" calcMode="discrete" keyTimes="${keyTimes}"/>`
+const shotAt = (delay: number, attr: string, values: string, dur: number, keyTimes: string): string =>
+  `<animate attributeName="${attr}" values="${values}" dur="${s2(dur)}s" begin="${s2(delay - SINCE)}s" fill="freeze" calcMode="discrete" keyTimes="${keyTimes}"/>`
+const shotMoveAt = (delay: number, values: string, dur: number, keyTimes: string): string =>
+  `<animateTransform attributeName="transform" type="translate" values="${values}" dur="${s2(dur)}s" begin="${s2(delay - SINCE)}s" fill="freeze" calcMode="discrete" keyTimes="${keyTimes}"/>`
+const even = (n: number): string => Array.from({ length: n }, (_, i) => s2(i / n)).join(';')
 const shotMove = (values: string, dur: number, keyTimes: string): string =>
   `<animateTransform attributeName="transform" type="translate" values="${values}" dur="${s2(dur)}s" begin="${s2(-SINCE)}s" fill="freeze" calcMode="discrete" keyTimes="${keyTimes}"/>`
 
@@ -859,11 +867,15 @@ const mistLayer = (shift: number): string => {
 // few bright four-point stars, a faint Milky Way and a shooting star.
 const skyStars = (mx: number, my: number): string => {
   const groups = Array.from({ length: 5 }, () => new Px())
+  const calm = new Px()
   for (let i = 0; i < 120; i++) {
     const x = ri(0, W - 1)
     const y = ri(0, 74)
     if (Math.hypot(x - mx, y - my) < 22 || y > farRidge(x) - 3) continue
-    groups[i % 5]!.rect(x, y, 1, 1, rnd() < 0.25 ? '#ffffff' : '#bccbe8')
+    const white = rnd() < 0.25
+    // behind the chat column the stars hold still and dim, so they don't flicker under the text
+    if (x > CHAT_LEFT && x < CHAT_RIGHT) calm.rect(x, y, 1, 1, '#8ea0c4')
+    else groups[i % 5]!.rect(x, y, 1, 1, white ? '#ffffff' : '#bccbe8')
   }
   const twinkle = groups
     .map((g, i) => `<g>${anim('opacity', '.35;.9;.5;1;.4', 3.1 + i * 0.9, i * 1.7, '0;0.2;0.45;0.65;0.85')}${g.svg()}</g>`)
@@ -873,28 +885,134 @@ const skyStars = (mx: number, my: number): string => {
     const cells: Array<string | undefined> = []
     for (let x = 0; x < W; x += 2) {
       const d = Math.abs(y - (60 - x * 0.24))
-      const v = Math.max(0, 1 - d / 16) * Math.max(0, Math.min(1, (250 - x) / 60)) * (y > farRidge(x) - 4 ? 0 : 1)
+      const v =
+        Math.max(0, 1 - d / 16) * Math.max(0, Math.min(1, (250 - x) / 60)) * (y > farRidge(x) - 4 ? 0 : 1) * (x > CHAT_LEFT && x < CHAT_RIGHT ? 0.5 : 1)
       cells.push(v > 0 && bayer(x >> 1, y >> 1) < v * v * 0.5 ? (v > 0.75 ? '#7d8fc0/0.22' : '#5a6f9e/0.16') : undefined)
     }
     milky.row(y, cells, 0, 2, 2)
   }
-  const bright = [[38, 14], [128, 8], [196, 30], [248, 12], [86, 34], [164, 50]]
+  const bright = [[38, 14], [96, 8], [262, 46], [256, 10], [86, 34], [22, 46]]
     .map(
       ([x, y], i) =>
         `<g transform="translate(${x} ${y})">${anim('opacity', '.35;1;.6;.9', 2.6 + i * 0.5, i * 0.8, '0;0.3;0.6;0.8')}<path fill="#dfe8ff" fill-opacity=".55" d="M0 -2h1v2h-1zM0 1h1v2h-1zM-2 0h2v1h-2zM1 0h2v1h-2z"/><rect width="1" height="1" fill="#fff"/></g>`,
     )
     .join('')
   // a shooting star every 27 seconds, across the upper left
-  const pos = Array.from({ length: 8 }, (_, k) => `${60 + k * 9} ${10 + k * 4}`)
+  const pos = Array.from({ length: 8 }, (_, k) => `${30 + k * 8} ${8 + k * 4}`)
   const shooting = `<g opacity="0">${anim('opacity', '0;1;0', 27, 5, '0;0.9;0.99')}<g>${moveD([pos[0]!, ...pos].join(';'), 27, 5, ['0', ...pos.map((_, k) => s2(0.9 + k * 0.0125))].join(';'))}<rect width="2" height="1" fill="#ffffff"/><rect x="-3" y="-1" width="3" height="1" fill="#cfe0ff" fill-opacity=".6"/><rect x="-7" y="-2" width="4" height="1" fill="#9fb6e6" fill-opacity=".3"/></g></g>`
-  return milky.svg() + twinkle + bright + shooting
+  return milky.svg() + `<g opacity=".55">${calm.svg()}</g>` + twinkle + bright + shooting
 }
 
 // an owl in the willow, blinking now and then
 const OWL = (eye: string): string =>
   sprite(['.B.B.', 'BBBBB', `B${eye}B${eye}B`, 'BBbBB', '.BBB.', '..k..'], { B: '#5a4632', b: '#3a2c20', Y: '#ffd45e', k: '#8a6a3a' })
-const owl = (): string =>
-  `<rect x="70" y="69" width="14" height="1" fill="#2a1f1a"/>${at(75, 63, `<g>${anim('opacity', '1;0', 5.5, 0, '0;0.93')}${OWL('Y')}</g><g opacity="0">${anim('opacity', '0;1', 5.5, 0, '0;0.93')}${OWL('b')}</g>`)}`
+const OWL_COLORS = { B: '#5a4632', b: '#3a2c20', Y: '#ffd45e', k: '#8a6a3a', W: '#7a6248' }
+const blinking = (open: string, shut: string): string =>
+  `<g>${anim('opacity', '1;0', 5.5, 0, '0;0.93')}${open}</g><g opacity="0">${anim('opacity', '0;1', 5.5, 0, '0;0.93')}${shut}</g>`
+// The owl has opinions: it hoots along while Claude reads, cocks its head while
+// you type, flaps at a catch, turns its back on an error, and keeps watch while
+// the fisherman sleeps.
+const owl = (mood: Mood): string => {
+  const branch = `<rect x="70" y="69" width="14" height="1" fill="#2a1f1a"/>`
+  let body: string
+  if (mood === 'catch')
+    body = at(74, 63, two(
+      sprite(['..B.B..', '.BBBBB.', 'WBYBYBW', 'WBBbBBW', '..BBB..', '...k...'], OWL_COLORS),
+      sprite(['W.B.B.W', 'WBBBBBW', '.BYBYB.', '.BBbBB.', '..BBB..', '...k...'], OWL_COLORS),
+      0.35,
+    ))
+  else if (mood === 'snap') body = at(75, 63, sprite(['.B.B.', 'BBBBB', 'BbBbB', 'BBBBB', '.BBB.', '..k..'], OWL_COLORS))
+  else if (mood === 'typing')
+    body = at(75, 63, blinking(
+      sprite(['..B.B', '.BBBB', '.BYBY', 'BBbBB', '.BBB.', '..k..'], OWL_COLORS),
+      sprite(['..B.B', '.BBBB', '.BbBb', 'BBbBB', '.BBB.', '..k..'], OWL_COLORS),
+    ))
+  else {
+    body = at(75, 63, blinking(OWL('Y'), OWL('b')))
+    if (mood === 'lantern') {
+      // head-bobbing, with a little hoot drifting up
+      body = `<g>${moveD('0 0;0 1', 0.5, 0)}${body}</g>`
+      body += [0, 1]
+        .map(i => `<g opacity="0">${anim('opacity', '0;.9;0', 2.4, i * 1.2, '0;0.15;0.7')}<g>${moveL('82 62', '88 52', 2.4, i * 1.2)}<rect width="2" height="1" fill="${GLYPH}"/><rect y="1" width="1" height="1" fill="${GLYPH}"/></g></g>`)
+        .join('')
+    }
+  }
+  return branch + body
+}
+
+// Everything besides the fisherman that answers his mood, in screen coordinates.
+// His bobber sits at x 250 on the waterline.
+const pondReacts = (p: Pond): { sky: string; water: string; air: string } => {
+  let sky = ''
+  let water = ''
+  let air = ''
+  const curious = (kind: string, x: number, y: number, flip: boolean, nibble: boolean): string => {
+    const turn = flip ? 'translate(17 0) scale(-1 1)' : ''
+    const motion = nibble ? moveD('0 0;1 0;0 0;1 -1;0 0', 0.7, x) : moveD('0 0;0 1', 2.4, x)
+    return `<g transform="translate(${x} ${y})" opacity=".85"><g>${motion}<g transform="${turn}">${sideFish(kind)}</g></g></g>`
+  }
+  const pair = (nibble: boolean): string => curious('kohaku', 229, 112, false, nibble) + curious('ogon', 254, 116, true, nibble)
+  switch (p.mood) {
+    case 'idle':
+    case 'typing':
+    case 'lantern':
+    case 'mend':
+    case 'sleep':
+      water += pair(false)
+      break
+    case 'watch':
+      water += pair(true)
+      break
+    case 'cast':
+      // they swim up from the deep to see what landed
+      water += `<g>${shotMoveAt(0, '-30 40;-30 40;-20 28;-12 16;-5 6;0 0', 1.8, '0;0.3;0.45;0.6;0.75;0.9')}${pair(false)}</g>`
+      break
+    case 'snap': {
+      // the one that got away darts off to the deep
+      const path = Array.from({ length: 10 }, (_, i) => `${240 - i * 10} ${116 + i * 2}`)
+      water += `<g>${shotAt(0, 'opacity', '1;0', 1.4, '0;0.95')}<g>${shotMoveAt(0, path.join(';'), 1.4, even(path.length))}<g transform="translate(17 0) scale(-1 1)">${sideFish('sanke')}</g></g></g>`
+      // and a cloud slides over the moon
+      const cloud = new Px()
+      for (const [cx, cy, r] of [[8, 5, 6], [16, 3, 8], [25, 6, 5]] as const)
+        for (let y = -r; y <= r; y++) {
+          const half = Math.floor(Math.sqrt(Math.max(0, r * r - y * y)) * 1.5)
+          if (cy + y <= 9) cloud.rect(cx - half, cy + y, half * 2, 1, '#0b1530/0.88')
+        }
+      sky += `<g>${shotMoveAt(0, '240 18;250 18;260 18;268 18;274 18;278 19', 1.5, even(6))}${cloud.svg()}</g>`
+      break
+    }
+    case 'catch': {
+      // two koi leap for joy, a shooting star crosses, the moon flares, fireflies burst
+      const leap = (x0: number, delay: number, kind: string): string => {
+        const n = 10
+        const arc = Array.from({ length: n }, (_, i) => {
+          const t = i / (n - 1)
+          return `${Math.round(x0 + t * 22)} ${Math.round(110 - 4 * 18 * t * (1 - t))}`
+        })
+        return `<g opacity="0">${shotAt(delay, 'opacity', '1;0', 1.1, '0;0.97')}<g>${shotMoveAt(delay, arc.join(';'), 1.1, even(n))}${sideFish(kind)}</g></g>`
+      }
+      water += leap(262, 0.5, 'showa') + leap(272, 1.1, 'platinum')
+      water += `<g opacity="0">${shotAt(0.5, 'opacity', '0;1;0', 2, '0;0.01;0.7')}${ripple(271, WL + 1, 0, 1)}</g>`
+      const star = Array.from({ length: 9 }, (_, k) => `${20 + k * 9} ${6 + k * 4}`)
+      sky += `<g opacity="0">${shotAt(0.3, 'opacity', '0;1;0', 1.2, '0;0.01;0.85')}<g>${shotMoveAt(0.3, star.join(';'), 1.2, even(star.length))}<rect width="2" height="1" fill="#fff"/><rect x="-3" y="-1" width="3" height="1" fill="#cfe0ff" fill-opacity=".7"/><rect x="-7" y="-2" width="4" height="1" fill="#9fb6e6" fill-opacity=".35"/></g></g>`
+      sky += `<g opacity="0">${shot('opacity', '0;1;.4;0', 2.4, '0;0.1;0.5;0.9')}${glow(SIDE_MOON.x, SIDE_MOON.y, 22, '#dfeaff/0.2', 0.9)}</g>`
+      air += Array.from({ length: 6 }, (_, i) => {
+        const a = (i / 6) * Math.PI * 2 + 0.5
+        const path = [0, 1, 2, 3, 4].map(k => `${Math.round(Math.cos(a) * k * 4)} ${Math.round(Math.sin(a) * k * 3 - k)}`)
+        return `<g transform="translate(305 86)" opacity="0">${shotAt(1.2, 'opacity', '1;1;0', 1.4, '0;0.6;0.95')}<g>${shotMoveAt(1.2, path.join(';'), 1.4, even(path.length))}<use href="#fly"/></g></g>`
+      }).join('')
+      break
+    }
+    case 'reel':
+      break
+  }
+  if (p.mood === 'sleep') {
+    // shooting stars come more often while he dreams
+    const pos = Array.from({ length: 8 }, (_, k) => `${252 + k * 7} ${2 + k}`)
+    sky += `<g opacity="0">${anim('opacity', '0;1;0', 9, 2, '0;0.8;0.95')}<g>${moveD([pos[0]!, ...pos].join(';'), 9, 2, ['0', ...pos.map((_, k) => s2(0.8 + k * 0.018))].join(';'))}<rect width="2" height="1" fill="#fff"/><rect x="-3" y="-1" width="3" height="1" fill="#cfe0ff" fill-opacity=".6"/></g></g>`
+  }
+  return { sky, water, air }
+}
 
 const buildSide = (p: Pond): string => {
   reseed(23)
@@ -903,7 +1021,7 @@ const buildSide = (p: Pond): string => {
     const w = Math.max(3, 20 - i * 2 + ri(-2, 2))
     return `<rect x="${mx - (w >> 1) + ri(-2, 2)}" y="${WL + 2 + i * 3}" width="${w}" height="1" fill="#dfeaff">${anim('opacity', '.8;.25;.55', 1.8, i * 0.41, '0;0.4;0.7')}</rect>`
   }).join('')
-  const surface = Array.from({ length: 26 }, () => {
+  const surface = Array.from({ length: 16 }, () => {
     const x = rnd() < 0.5 ? ri(0, 114) : ri(250, W - 4) // glints stay in the margins
     return `<rect x="${x}" y="${WL}" width="${ri(2, 5)}" height="1" fill="#9fc3ea" opacity="0">${anim('opacity', '.6;.2;0', 5, rnd() * 5, '0;0.2;0.4')}</rect>`
   }).join('')
@@ -922,8 +1040,10 @@ const buildSide = (p: Pond): string => {
     return `<g transform="translate(${x} 186)"><g>${moveL('0 0', '0 -78', dur, rnd() * dur)}<rect width="1" height="1" fill="#a9cdf2" fill-opacity=".7"/></g></g>`
   }).join('')
   const stars = skyStars(mx, my)
+  const reacts = pondReacts(p)
+  const working = p.mood === 'watch' || p.mood === 'reel' || p.mood === 'lantern' || p.mood === 'mend' || p.mood === 'cast'
   // lights of a far-off village on the hills
-  const village = [172, 178, 207, 214, 221]
+  const village = [172, 178, 207, 214, 221, ...(working ? [186, 193, 228, 234, 240] : [])]
     .map((x, i) => `<rect x="${x}" y="${farRidge(x) + 2 + (i % 2)}" width="1" height="1" fill="#f0b860">${anim('opacity', '.9;.5;.8;.3', 4 + i, i * 1.3, '0;0.3;0.6;0.85')}</rect>`)
     .join('')
   // starlight caught on the water near the banks
@@ -932,7 +1052,7 @@ const buildSide = (p: Pond): string => {
   const waterStars = `<g opacity=".5">${anim('opacity', '.5;.2;.4;.1', 3.7, 0.5, '0;0.3;0.6;0.8')}${wstars.svg()}</g>`
   // moths around the dock lantern
   const moths = [0, 1]
-    .map(i => `<g transform="translate(${308 + i * 4} ${74 + i * 2})"><g>${moveD('0 0;2 -1;3 1;1 3;-1 2;-2 0;-1 -2', 0.9 + i * 0.3, i * 0.4)}<rect width="1" height="1" fill="#e8dcc0"/></g></g>`)
+    .map(i => `<g transform="translate(${p.mood === 'lantern' ? 256 + i * 3 : 308 + i * 4} ${p.mood === 'lantern' ? 88 + i * 2 : 74 + i * 2})"><g>${moveD('0 0;2 -1;3 1;1 3;-1 2;-2 0;-1 -2', 0.9 + i * 0.3, i * 0.4)}<rect width="1" height="1" fill="#e8dcc0"/></g></g>`)
     .join('')
   const cloud = (y: number, dur: number, phase: number, w: number): string => {
     const px = new Px()
@@ -969,23 +1089,24 @@ const buildSide = (p: Pond): string => {
       return pad + bloom
     }).join('')
   const fireflies = [
-    ...Array.from({ length: 9 }, () => firefly(ri(40, 116), ri(56, 100))),
-    ...Array.from({ length: 4 }, () => firefly(ri(254, 314), ri(60, 92))),
+    ...Array.from({ length: 7 }, () => firefly(ri(40, 116), ri(56, 100))),
+    ...Array.from({ length: 3 }, () => firefly(ri(254, 314), ri(60, 92))),
   ].join('')
-  const dockLamp = `<g>${anim('opacity', '1;.75;.9;.8', 1.1, 0.3)}${glow(312, 76, 16, '#ffcf7a/0.2', 0.9)}</g>${at(310, 73, sprite(['LL', 'YY', 'YY', 'LL'], { L: '#8a5a2b', Y: '#ffe29a' }))}`
-  const toroGlow = `<g>${anim('opacity', '1;.7;.9', 1.4, 0.8)}${glow(67, bankTop(67) - 8, 12, '#ffcf7a/0.2', 0.9)}</g>`
+  const lampBoost = (cx: number, cy: number): string => (working ? glow(cx, cy, 24, '#ffcf7a/0.1', 0.8) : '')
+  const dockLamp = `<g opacity="${p.mood === 'sleep' ? 0.45 : 1}">${anim('opacity', '1;.75;.9;.8', 1.1, 0.3)}${glow(312, 76, 16, '#ffcf7a/0.2', 0.9)}${lampBoost(312, 76)}</g>${at(310, 73, sprite(['LL', 'YY', 'YY', 'LL'], { L: '#8a5a2b', Y: '#ffe29a' }))}`
+  const toroGlow = `<g>${anim('opacity', '1;.7;.9', 1.4, 0.8)}${glow(67, bankTop(67) - 8, 12, '#ffcf7a/0.2', 0.9)}${lampBoost(67, bankTop(67) - 8)}</g>`
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice">
 <defs>${sideKoiDefs}<g id="lotus">${LOTUS}</g>${RINGS.map(rr => `<g id="ring${rr}">${ringPath(rr, 2.6)}</g>`).join('')}${FLY}</defs>
 ${sideStatic()}
-${stars}${village}${moonDisc(mx, my, r)}${cloud(14, 260, 40, 50)}${cloud(38, 340, 200, 40)}
-${willow()}${owl()}${toroGlow}${reeds()}
+${stars}${village}${moonDisc(mx, my, r)}${reacts.sky}${cloud(14, 260, 40, 50)}${cloud(38, 340, 200, 40)}
+${willow()}${owl(p.mood)}${toroGlow}${reeds()}
 <rect x="0" y="${WL}" width="118" height="1" fill="#4a7fb0" fill-opacity=".55"/><rect x="118" y="${WL}" width="130" height="1" fill="#4a7fb0" fill-opacity=".15"/><rect x="248" y="${WL}" width="${W - 248}" height="1" fill="#4a7fb0" fill-opacity=".55"/>${surface}${waterStars}${reflection}
 ${rays}${seaweed()}${bubbles}${lilies}${two(mistLayer(0), mistLayer(1), 3.4)}
 ${patrol('kohaku', 128, 34, 110, 30, 0.1)}${patrol('ogon', 158, 38, 106, 36, 0.55)}${patrol('tancho', 176, 44, 96, 26, 0.3, 0.85)}
 ${patrol('showa', 134, 254, 310, 23, 0.2)}${patrol('sanke', 164, 258, 312, 27, 0.7)}
-${cruise('asagi', 146, 1, 80, 0.3, 0.45)}${cruise('chagoi', 172, -1, 95, 0.75, 0.4)}
-${dockLamp}${moths}<g transform="translate(10 0)">${fisherman(p)}</g>${fireflies}
+${cruise('asagi', 146, 1, 80, 0.3, 0.45)}${cruise('chagoi', 172, -1, 95, 0.75, 0.4)}${reacts.water}
+${dockLamp}${moths}<g transform="translate(10 0)">${fisherman(p)}</g>${fireflies}${reacts.air}
 </svg>`
 }
 
@@ -1042,7 +1163,7 @@ const go = async ($: Engine, mood: Mood, then?: [Mood, number]): Promise<void> =
 const LOOK: ThemeSetArgs = {
   colors: theme,
   overrideColorScheme: 'dark',
-  backdrop: { scene: SCENE_ID, glass: { blur: 1, tint: '#08111e', opacity: 0.42 } },
+  backdrop: { scene: SCENE_ID, glass: { blur: 1, tint: '#08111e', opacity: 0.55 } },
 }
 
 export const register: Register = on => {
